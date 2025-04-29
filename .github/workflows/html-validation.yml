@@ -1,0 +1,40 @@
+name: HTML Validation
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate-html:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Install HTML5 validator
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget
+          wget https://github.com/validator/validator/releases/download/20.6.30/vnu.linux.zip
+          unzip vnu.linux.zip
+          sudo mv vnu-runtime-image/bin/vnu /usr/local/bin/
+          sudo mv vnu-runtime-image/bin/vnu.jar /usr/local/bin/
+
+      - name: Validate HTML files
+        run: |
+          for file in $(find . -name "*.html"); do
+            echo "Validating $file"
+            vnu $file
+          done
+
+      - name: Check for broken links
+        run: |
+          pip install linkchecker
+          linkchecker index.html --check-extern
+
+      - name: Check HTML formatting
+        run: |
+          npm install -g prettier
+          prettier --check "**/*.html"
