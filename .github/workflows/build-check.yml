@@ -1,0 +1,143 @@
+name: Build Error Check
+
+on:
+  push:
+    branches: ["**"] # Run on all branches
+  pull_request:
+    branches: ["**"] # Run on all PRs against any branch
+
+permissions:
+  contents: read
+  issues: write # Explicitly grant permission to create issues
+
+jobs:
+  build-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: "18"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check for lint errors
+        id: lint
+        continue-on-error: true # Continue even if linting fails
+        run: npm run lint
+
+      - name: Check for TypeScript errors
+        id: typescript
+        continue-on-error: true # Continue even if type checking fails
+        run: npx tsc --noEmit
+
+      - name: Build project
+        id: build
+        continue-on-error: true # Continue even if build fails
+        run: npm run build
+
+      - name: Check for failures
+        id: check-failures
+        run: |
+          if [ "${{ steps.lint.outcome }}" == "failure" ] || [ "${{ steps.typescript.outcome }}" == "failure" ] || [ "${{ steps.build.outcome }}" == "failure" ]; then
+            echo "failures=true" >> $GITHUB_OUTPUT
+          else
+            echo "failures=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create failure summary
+        if: steps.check-failures.outputs.failures == 'true'
+        run: |
+          echo "## Build Check Failed ❌" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ steps.lint.outcome }}" == "failure" ]; then
+            echo "- ❌ **Lint check failed**" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- ✅ Lint check passed" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ "${{ steps.typescript.outcome }}" == "failure" ]; then
+            echo "- ❌ **TypeScript check failed**" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- ✅ TypeScript check passed" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ "${{ steps.build.outcome }}" == "failure" ]; then
+            echo "- ❌ **Build failed**" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- ✅ Build passed" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Create success summary
+        if: steps.check-failures.outputs.failures == 'false'
+        run: |
+          echo "## Build Check Passed ✅" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Lint check passed" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ TypeScript check passed" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Build passed" >> $GITHUB_STEP_SUMMARY
+
+      # Check for existing issues before creating a new one
+      - name: Check for existing issues and notify on failures
+        if: steps.check-failures.outputs.failures == 'true'
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |-
+            const { repo, owner } = context.repo;
+            const run_id = context.runId;
+            const run_url = `https://github.com/${owner}/${repo}/actions/runs/${run_id}`;
+            const branch = context.ref.replace('refs/heads/', '');
+
+            let errorDetails = [];
+            if ('${{ steps.lint.outcome }}' === 'failure') errorDetails.push('Lint checks');
+            if ('${{ steps.typescript.outcome }}' === 'failure') errorDetails.push('TypeScript checks');
+            if ('${{ steps.build.outcome }}' === 'failure') errorDetails.push('Build process');
+
+            const errorList = errorDetails.join(', ');
+            const issueTitle = `🚨 Build failures detected in ${branch}`;
+
+            // Check for existing open issues with the same title
+            const existingIssues = await github.rest.issues.listForRepo({
+              owner,
+              repo,
+              state: 'open',
+              per_page: 100
+            });
+
+            const similarIssue = existingIssues.data.find(issue => 
+              issue.title === issueTitle && 
+              issue.body.includes(`Branch: ${branch}`)
+            );
+
+            if (similarIssue) {
+              console.log(`Found existing issue #${similarIssue.number}. Updating comment.`);
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: similarIssue.number,
+                body: `New failures detected in commit ${context.sha.substring(0, 7)}.\n\n### Failed Checks\n${errorDetails.map(error => `- ${error}`).join('\n')}\n\n### Details\n- Commit: ${context.sha}\n- Workflow Run: [View Details](${run_url})`
+              });
+            } else {
+              console.log('Creating new issue for build failures');
+              const issue = await github.rest.issues.create({
+                owner,
+                repo,
+                title: issueTitle,
+                body: `A recent commit (${context.sha}) has build issues.\n\n### Failed Checks\n${errorDetails.map(error => `- ${error}`).join('\n')}\n\n### Details\n- Commit: ${context.sha}\n- Branch: ${branch}\n- Workflow Run: [View Details](${run_url})\n\nPlease fix these issues before merging.`
+              });
+              
+              console.log(`Created issue #${issue.data.number}: ${issue.data.html_url}`);
+            }
+
+      # Show warning but don't fail the workflow
+      - name: Final status check
+        if: steps.check-failures.outputs.failures == 'true'
+        run: echo "::warning::Build checks have failed. Please check the created issue for details."
