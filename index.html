@@ -1,20 +1,43 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Students Page</title>
+  <meta name="description" content="Student contributions page for first PR practice">
+  <title>Student Contributors</title>
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
   <header>
-    <h1>Add your Name here!</h1>
+    <h1><i class="fas fa-code-branch"></i> Student Contributors</h1>
+    <p class="subtitle">Add your name to make your first Pull Request!</p>
   </header>
+  
   <main>
-    <ul id="student-list">
-      <!-- Students' names will be added here -->
+    <div class="container">
+      <div class="instructions">
+        <h2>How to contribute:</h2>
+        <ol>
+          <li>Fork this repository</li>
+          <li>Add your name to the list</li>
+          <li>Submit a pull request</li>
+        </ol>
+      </div>
       
+
+      <div class="contributors-section">
+        <h2>Contributors</h2>
+        <ul id="student-list">
+          <li class="contributor-card">
+            <span class="contributor-name">Patel Muhammad</span>
+            <span class="contributor-info">GitHub Campus Expert ❤️</span>
+          </li>
+          <!-- Add your name above this line as a new li element -->
+        </ul>
+      </div>
+    </div>
+
         <li>
                Patel Muhammad - I am GitHub Campus Expert ❤️
         </li>
@@ -42,8 +65,14 @@
 
     </ul>
   </main>
+  
   <footer>
-    <p>&copy; Create your first PR with me ❤️</p>
+    <p>&copy; 2025 Create your first PR with me ❤️</p>
+    <div class="social-links">
+      <a href="https://github.com" target="_blank" rel="noopener noreferrer">
+        <i class="fab fa-github"></i>
+      </a>
+    </div>
   </footer>
 </body>
 </html>
